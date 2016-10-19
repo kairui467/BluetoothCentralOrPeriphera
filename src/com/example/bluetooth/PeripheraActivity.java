@@ -31,7 +31,7 @@ import android.widget.Toast;
 @SuppressLint("NewApi")
 public class PeripheraActivity extends Activity {
 
-	protected static final String TAG = "gomtel---";
+	private final String TAG = Constants.TAG;
 	private static final int WHAT_STATE_CONNECTED = 2;
 	private static final int WHAT_STATE_DISCONNECTED = 3;
 

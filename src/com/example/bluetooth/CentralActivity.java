@@ -43,7 +43,7 @@ import android.widget.Toast;
 @SuppressLint("NewApi")
 public class CentralActivity extends Activity {
 
-	private static final String TAG = "gomtel---";
+	private final String TAG = Constants.TAG;
 	private static final int WHAT_STOP_SCAN = 1;
 	private static final int WHAT_STATE_CONNECTED = 2;
 	private static final int WHAT_STATE_DISCONNECTED = 3;
