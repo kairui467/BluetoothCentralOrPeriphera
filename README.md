@@ -1,2 +1,2 @@
-# BluetoothCentralOrPeriphera
+# BluetoothBleCentralOrPeriphera
 Android低功耗蓝牙Ble中央和周边设备Demo
