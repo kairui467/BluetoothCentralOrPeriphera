@@ -1,25 +1,44 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     tools:context="${relativePackage}.${activityClass}" >
 
-    <Button
+    <LinearLayout
+        android:id="@+id/btn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:onClick="scanClick"
-        android:text="扫描" />
+        android:orientation="horizontal" >
 
-    <ProgressBar
-        android:id="@+id/pb"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:visibility="gone" />
+        <Button
+            android:id="@+id/btn_scanBT"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:onClick="scanClick"
+            android:text="扫描经典蓝牙" />
+
+        <Button
+            android:id="@+id/btn_scanBLE"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:onClick="scanClick"
+            android:text="扫描BLE" />
+
+        <Button
+            android:id="@+id/btn_conn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:onClick="scanClick"
+            android:text="MAC地址连接" />
+    </LinearLayout>
 
     <ListView
         android:id="@+id/lv_devicelist"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:layout_below="@id/btn" />
 
-</LinearLayout>
+</RelativeLayout>

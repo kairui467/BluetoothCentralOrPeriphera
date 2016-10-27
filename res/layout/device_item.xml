@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="72dp"
+    android:layout_height="wrap_content"
     android:paddingBottom="4dp"
     android:paddingLeft="8dp"
     android:paddingRight="8dp"
@@ -38,11 +38,24 @@
         android:id="@+id/tv_connState"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignLeft="@id/tv_name"
-        android:layout_alignParentBottom="true"
+        android:layout_alignLeft="@id/tv_address"
         android:layout_below="@id/tv_address"
-        android:layout_marginTop="4dp"
         android:text="状态: 未连接"
         android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/tv_rssi"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentRight="true"
+        android:text="信号" />
+
+    <TextView
+        android:id="@+id/tv_dis"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentRight="true"
+        android:layout_below="@id/tv_rssi"
+        android:text="距离" />
 
 </RelativeLayout>

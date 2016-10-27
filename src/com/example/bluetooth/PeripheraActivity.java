@@ -62,12 +62,12 @@ public class PeripheraActivity extends Activity {
 	public void scanClick(View v) {
 		if (mGattServer == null || mConnDeviceAddress.isEmpty())
 			return;
-		
+
 		mHandler.post(new Runnable() {
 			public void run() {
 				BluetoothDevice remoteDevice = mAdapter.getRemoteDevice(mConnDeviceAddress);
 				boolean connectState = mGattServer.connect(remoteDevice, true);
-				Log.i("gomtel---", "连接状态：" + connectState);
+				Log.i(TAG, "连接状态：" + connectState);
 			}
 		});
 	}
@@ -83,13 +83,11 @@ public class PeripheraActivity extends Activity {
 		mDevicesAdapter = new DevicesAdapter(getApplicationContext());
 
 		btnConn = (Button) findViewById(R.id.btn_conn);
-		setBtnState();
 		mListView = (ListView) findViewById(R.id.lv_devicelist);
 		mListView.setAdapter(mDevicesAdapter);
+		setBtnState();
 
 		mBluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
-		mAdapter = mBluetoothManager.getAdapter();
-		mGattServer = mBluetoothManager.openGattServer(this, mGattServerCallback);//获取GattServer实例 
 	}
 
 	@Override
@@ -117,8 +115,11 @@ public class PeripheraActivity extends Activity {
 			return;
 		}
 
-		/*mLeAdvertiser = mAdapter.getBluetoothLeAdvertiser();
-		mGattServer = mBluetoothManager.openGattServer(this, mGattServerCallback);*/
+		mAdapter = mBluetoothManager.getAdapter();
+		mGattServer = mBluetoothManager.openGattServer(this, mGattServerCallback);//获取GattServer实例 
+
+		mAdapter.setName("周边");
+		getActionBar().setTitle("Periphera：" + mAdapter.getAddress());
 
 		addServer();
 		startAdvertising();
@@ -141,8 +142,6 @@ public class PeripheraActivity extends Activity {
 		mGattService.addCharacteristic(characteristic);
 		//mGattServer.addCharacteristic(characteristicUpdating);
 		mGattServer.addService(mGattService);
-
-		mAdapter.setName("123456");
 	}
 
 	private void startAdvertising() {
@@ -198,22 +197,22 @@ public class PeripheraActivity extends Activity {
 		 */
 		public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
 			super.onConnectionStateChange(device, status, newState);
-			Log.i("gomtel---", "onConnectionStateChange");
+			Log.i(TAG, "onConnectionStateChange");
 			mConnDeviceAddress = device.getAddress();
 
 			if (newState == BluetoothProfile.STATE_CONNECTED) {
-				Log.i("gomtel---", "已连接!" + device.getName() + ", " + device.getAddress());
+				Log.i(TAG, "已连接!" + device.getName() + ", " + device.getAddress());
 				Message.obtain(mHandler, WHAT_STATE_CONNECTED, device).sendToTarget();
 
 			} else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-				Log.i("gomtel---", "已断开");
+				Log.i(TAG, "已断开");
 				Message.obtain(mHandler, WHAT_STATE_DISCONNECTED).sendToTarget();
 			}
 		}
 
 		/**
-		 * 当有服务请求读 characteristic的时候 
-		 * device发请求的远端设备引用 
+		 * 当有服务请求读 characteristic 的时候 
+		 * device发请求的远端设备引用
 		 * requestId 请求Id 
 		 * offset 偏移量 
 		 * characteristic被请求的 characteristic 
@@ -221,7 +220,7 @@ public class PeripheraActivity extends Activity {
 		public void onCharacteristicReadRequest(BluetoothDevice device, int requestId, int offset,
 				BluetoothGattCharacteristic characteristic) {
 			super.onCharacteristicReadRequest(device, requestId, offset, characteristic);
-			Log.i("gomtel---", "onCharacteristicReadRequest");
+			Log.i(TAG, "onCharacteristicReadRequest");
 		}
 
 		/**
@@ -234,9 +233,9 @@ public class PeripheraActivity extends Activity {
 				BluetoothGattCharacteristic characteristic, boolean preparedWrite, boolean responseNeeded, int offset,
 				byte[] value) {
 			super.onCharacteristicWriteRequest(device, requestId, characteristic, preparedWrite, responseNeeded, offset, value);
-			Log.i("gomtel---", "onCharacteristicWriteRequest");
+			Log.i(TAG, "onCharacteristicWriteRequest");
 		}
-		
+
 		/**
 		 * 类似characteristic的读
 		 */
@@ -251,7 +250,7 @@ public class PeripheraActivity extends Activity {
 		public void onDescriptorWriteRequest(BluetoothDevice device, int requestId, BluetoothGattDescriptor descriptor,
 				boolean preparedWrite, boolean responseNeeded, int offset, byte[] value) {
 			super.onDescriptorWriteRequest(device, requestId, descriptor, preparedWrite, responseNeeded, offset, value);
-			Log.i("gomtel---", "onDescriptorWriteRequest");
+			Log.i(TAG, "onDescriptorWriteRequest");
 		}
 
 		/**
@@ -259,7 +258,7 @@ public class PeripheraActivity extends Activity {
 		 */
 		public void onExecuteWrite(BluetoothDevice device, int requestId, boolean execute) {
 			super.onExecuteWrite(device, requestId, execute);
-			Log.i("gomtel---", "onExecuteWrite");
+			Log.i(TAG, "onExecuteWrite");
 		}
 
 		/**
@@ -267,7 +266,7 @@ public class PeripheraActivity extends Activity {
 		 */
 		public void onNotificationSent(BluetoothDevice device, int status) {
 			super.onNotificationSent(device, status);
-			Log.i("gomtel---", "onNotificationSent");
+			Log.i(TAG, "onNotificationSent");
 		}
 
 		/**
@@ -275,7 +274,7 @@ public class PeripheraActivity extends Activity {
 		 */
 		public void onServiceAdded(int status, BluetoothGattService service) {
 			super.onServiceAdded(status, service);
-			Log.i("gomtel---", "onServiceAdded");
+			Log.i(TAG, "onServiceAdded");
 		}
 
 		/**
@@ -283,7 +282,7 @@ public class PeripheraActivity extends Activity {
 		 */
 		public void onMtuChanged(BluetoothDevice device, int mtu) {
 			super.onMtuChanged(device, mtu);
-			Log.i("gomtel---", "onMtuChanged");
+			Log.i(TAG, "onMtuChanged");
 		}
 
 	};
