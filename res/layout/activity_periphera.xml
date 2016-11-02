@@ -5,16 +5,63 @@
     android:orientation="vertical"
     tools:context="${relativePackage}.${activityClass}" >
 
-    <Button
-        android:id="@+id/btn_conn"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:onClick="scanClick"
-        android:text="连接" />
+        android:orientation="horizontal" >
+
+        <Button
+            android:id="@+id/btn_conn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:onClick="scanClick"
+            android:text="连接" />
+
+        <Button
+            android:id="@+id/btn_empty"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:onClick="scanClick"
+            android:text="清空" />
+    </LinearLayout>
 
     <ListView
         android:id="@+id/lv_devicelist"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="wrap_content" />
+
+    <RelativeLayout
+        android:id="@+id/rl_sendData"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" >
+
+        <EditText
+            android:id="@+id/et_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignBottom="@+id/btn_send"
+            android:layout_alignParentLeft="true"
+            android:layout_toLeftOf="@+id/btn_send"
+            android:enabled="false"
+            android:text="数据" />
+
+        <Button
+            android:id="@+id/btn_send"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"
+            android:enabled="false"
+            android:onClick="scanClick"
+            android:text="发送" />
+
+        <ListView
+            android:id="@+id/lv_datalist"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_below="@id/et_text" />
+    </RelativeLayout>
 
 </LinearLayout>

@@ -40,6 +40,10 @@ public class DevicesAdapter extends BaseAdapter {
 		add(bd, false, 0);
 	}
 
+	public void add(BDevice bd) {
+		add(bd.mDevice, false, bd.rssi);
+	}
+
 	public void add(BluetoothDevice bd, int rssi) {
 		add(bd, false, rssi);
 	}
@@ -154,13 +158,13 @@ public class DevicesAdapter extends BaseAdapter {
 		if (convertView == null)
 			convertView = LayoutInflater.from(mContext).inflate(R.layout.device_item, parent, false);
 
-		BDevice bDevice = mConnDevices.get(position);
-
 		TextView name = ViewHolder.get(convertView, R.id.tv_name);
 		TextView address = ViewHolder.get(convertView, R.id.tv_address);
 		TextView connState = ViewHolder.get(convertView, R.id.tv_connState);
 		TextView rssi = ViewHolder.get(convertView, R.id.tv_rssi);
 		TextView dis = ViewHolder.get(convertView, R.id.tv_dis);
+
+		BDevice bDevice = mConnDevices.get(position);
 
 		String deviceName = bDevice.mDevice.getName();
 		if (deviceName == null || deviceName == "")

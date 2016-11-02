@@ -38,7 +38,40 @@
     <ListView
         android:id="@+id/lv_devicelist"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
         android:layout_below="@id/btn" />
+
+    <RelativeLayout
+        android:id="@+id/rl_sendData"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/lv_devicelist"
+        android:visibility="gone" >
+
+        <EditText
+            android:id="@+id/et_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignBottom="@+id/btn_send"
+            android:layout_alignParentLeft="true"
+            android:layout_toLeftOf="@+id/btn_send"
+            android:textSize="10sp"
+            android:text="数据" />
+
+        <Button
+            android:id="@+id/btn_send"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"
+            android:onClick="scanClick"
+            android:enabled="false"
+            android:text="发送" />
+
+        <ListView
+            android:id="@+id/lv_datalist"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_below="@id/et_text" />
+    </RelativeLayout>
 
 </RelativeLayout>

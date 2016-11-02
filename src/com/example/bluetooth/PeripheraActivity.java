@@ -1,5 +1,8 @@
 package com.example.bluetooth;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
@@ -24,8 +27,16 @@ import android.os.Message;
 import android.os.ParcelUuid;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 @SuppressLint("NewApi")
@@ -34,13 +45,23 @@ public class PeripheraActivity extends Activity {
 	private final String TAG = Constants.TAG;
 	private static final int WHAT_STATE_CONNECTED = 2;
 	private static final int WHAT_STATE_DISCONNECTED = 3;
+	private static final int WHAT_WRITE_REQUEST = 4;
 
 	private BluetoothManager mBluetoothManager;
 	private BluetoothGattServer mGattServer;
-	private BluetoothAdapter mAdapter;
+	private BluetoothAdapter mBluetoothAdapter;
 	private BluetoothLeAdvertiser mLeAdvertiser;
+
 	private Button btnConn;
-	private ListView mListView;
+	private ListView mLvDevice;
+
+	private RelativeLayout mRlSend;
+	private ListView mLvData;
+	private ArrayList<String> mData;
+	private ArrayAdapter<String> mDataAdapter;
+	private EditText mEtSendData;
+	private Button mBtnSendData;
+
 	private DevicesAdapter mDevicesAdapter;
 	protected String mConnDeviceAddress = null;
 
@@ -50,26 +71,55 @@ public class PeripheraActivity extends Activity {
 				case WHAT_STATE_CONNECTED:
 					BluetoothDevice device = (BluetoothDevice) msg.obj;
 					mDevicesAdapter.add(device, true);
+					mRlSend.setVisibility(View.VISIBLE);
 					break;
 				case WHAT_STATE_DISCONNECTED:
 					mDevicesAdapter.removeAll();
+					mRlSend.setVisibility(View.GONE);
+					mData.clear();
+					mDataAdapter.notifyDataSetChanged();
+					mEtSendData.setText("" + mData.size());
+					break;
+				case WHAT_WRITE_REQUEST:
+					String value = (String) msg.obj;
+					Log.i(TAG, "onCharacteristicWriteRequest:" + new String(value));
+					mData.add(0, value);
+					mDataAdapter.notifyDataSetChanged();
+					mEtSendData.setText("" + mData.size());
 					break;
 			}
 			setBtnState();
 		};
 	};
+	private boolean advertising;
 
 	public void scanClick(View v) {
-		if (mGattServer == null || mConnDeviceAddress.isEmpty())
-			return;
+		switch (v.getId()) {
+			case R.id.btn_conn:
+				if (mGattServer == null || mConnDeviceAddress.isEmpty())
+					return;
 
-		mHandler.post(new Runnable() {
-			public void run() {
-				BluetoothDevice remoteDevice = mAdapter.getRemoteDevice(mConnDeviceAddress);
-				boolean connectState = mGattServer.connect(remoteDevice, true);
-				Log.i(TAG, "连接状态：" + connectState);
-			}
-		});
+				mHandler.post(new Runnable() {
+					public void run() {
+						BluetoothDevice remoteDevice = mBluetoothAdapter.getRemoteDevice(mConnDeviceAddress);
+						boolean connectState = mGattServer.connect(remoteDevice, true);
+						Log.i(TAG, "连接状态：" + connectState);
+					}
+				});
+				break;
+			case R.id.btn_empty:
+				mData.clear();
+				mDataAdapter.notifyDataSetChanged();
+				mEtSendData.setText("" + mData.size());
+				break;
+
+			case R.id.btn_send:
+
+				break;
+
+			default:
+				break;
+		}
 	}
 
 	protected void setBtnState() {
@@ -79,24 +129,59 @@ public class PeripheraActivity extends Activity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		getWindow()
+				.setFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON, WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		setContentView(R.layout.activity_periphera);
 		mDevicesAdapter = new DevicesAdapter(getApplicationContext());
 
 		btnConn = (Button) findViewById(R.id.btn_conn);
-		mListView = (ListView) findViewById(R.id.lv_devicelist);
-		mListView.setAdapter(mDevicesAdapter);
+		mLvDevice = (ListView) findViewById(R.id.lv_devicelist);
+
+		mRlSend = (RelativeLayout) findViewById(R.id.rl_sendData);
+		mLvData = (ListView) findViewById(R.id.lv_datalist);
+		mEtSendData = (EditText) findViewById(R.id.et_text);
+		mBtnSendData = (Button) findViewById(R.id.btn_send);
+
+		mLvDevice.setAdapter(mDevicesAdapter);
+
+		mData = new ArrayList<String>();
+		mDataAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, mData) {
+			public View getView(int position, View convertView, ViewGroup parent) {
+				TextView tv = (TextView) super.getView(position, convertView, parent);
+				if (tv != null)
+					tv.setTextSize(10);
+				return tv;
+			}
+		};
+		mLvData.setAdapter(mDataAdapter);
 		setBtnState();
 
 		mBluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+		mBluetoothAdapter = mBluetoothManager.getAdapter();
+		mLeAdvertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
+
+		mBluetoothAdapter.setName("周边");
+		getActionBar().setTitle("Periphera：" + mBluetoothAdapter.getAddress());
+		getActionBar().setDisplayHomeAsUpEnabled(true);
+
+		initBluetooth();
+
+		mLvDevice.setOnItemClickListener(new OnItemClickListener() {
+			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+				// 断开连接
+				List<BluetoothDevice> connectedDevices = mBluetoothManager.getConnectedDevices(BluetoothProfile.GATT);
+				for (BluetoothDevice bd : connectedDevices)
+					if (bd != null)
+						mGattServer.cancelConnection(bd);
+			}
+		});
 	}
 
-	@Override
-	protected void onResume() {
-		super.onResume();
+	private void initBluetooth() {
 		// We need to enforce that Bluetooth is first enabled, and take the user to settings to enable it if they have not done so.
-		if (mAdapter == null || !mAdapter.isEnabled()) {//启用蓝牙
+		if (mBluetoothAdapter == null || !mBluetoothAdapter.isEnabled()) {//启用蓝牙
 			Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-			startActivity(enableBtIntent);
+			startActivityForResult(enableBtIntent, 1);
 			finish();
 			return;
 		}
@@ -109,66 +194,59 @@ public class PeripheraActivity extends Activity {
 		}
 
 		//Check for advertising support. Not all devices are enabled to advertise Bluetooth LE data.
-		if (!mAdapter.isMultipleAdvertisementSupported()) {
+		if (!mBluetoothAdapter.isMultipleAdvertisementSupported()) {
 			Toast.makeText(this, "No Advertising Support.", Toast.LENGTH_SHORT).show();
 			finish();
 			return;
 		}
 
-		mAdapter = mBluetoothManager.getAdapter();
-		mGattServer = mBluetoothManager.openGattServer(this, mGattServerCallback);//获取GattServer实例 
-
-		mAdapter.setName("周边");
-		getActionBar().setTitle("Periphera：" + mAdapter.getAddress());
-
-		addServer();
-		startAdvertising();
+		startAdvertise();
 	}
 
-	private void addServer() {
-		BluetoothGattService mGattService = new BluetoothGattService(Constants.SERVICE_UUID,
-				BluetoothGattService.SERVICE_TYPE_PRIMARY);
-
-		BluetoothGattCharacteristic characteristic = new BluetoothGattCharacteristic(//
-				Constants.CHARACTERISTIC_UUID, 0x0A, 0x11);
-
-		BluetoothGattDescriptor descriptor = new BluetoothGattDescriptor(Constants.DESCRIPTOR_UUID, 0x11);
-		descriptor.setValue("gdd test".getBytes());
-
-		characteristic.addDescriptor(descriptor);
-		characteristic.setValue("the characteristic".getBytes());
-		/*BluetoothGattCharacteristic characteristicUpdating = new BluetoothGattCharacteristic(
-				Constants.CHARACTERISTIC_UUID_UPDATING, 0x0A, 0x11);*/
-		mGattService.addCharacteristic(characteristic);
-		//mGattServer.addCharacteristic(characteristicUpdating);
-		mGattServer.addService(mGattService);
-	}
-
-	private void startAdvertising() {
-		mAdapter = mBluetoothManager.getAdapter();
-		mLeAdvertiser = mAdapter.getBluetoothLeAdvertiser();
-
-		AdvertiseSettings settings = new AdvertiseSettings.Builder().build();
-
-		AdvertiseData data = new AdvertiseData.Builder()//
-				.addServiceUuid(new ParcelUuid(Constants.SERVICE_UUID))//
-				.addManufacturerData(1, "1".getBytes())//
-				.setIncludeDeviceName(true)//
-				.addServiceData(new ParcelUuid(Constants.SERVICE_UUID), "1".getBytes())//
-				.build();
-
-		// 发送让中心设备获取自己信息的方法 
-		mLeAdvertiser.startAdvertising(settings, data, mAdvertiseCallback);
-	}
-
-	/*
-	 * Terminate the advertiser
-	 */
-	private void stopAdvertising() {
+	public void startAdvertise() {
 		if (mLeAdvertiser == null)
 			return;
 
-		mLeAdvertiser.stopAdvertising(mAdvertiseCallback);
+		mGattServer = mBluetoothManager.openGattServer(this, mGattServerCallback);
+		addServiceToGattServer();
+
+		//AdvertisementData.Builder dataBuilder = new AdvertisementData.Builder();
+		AdvertiseData.Builder dataBuilder = new AdvertiseData.Builder();
+		AdvertiseSettings.Builder settingsBuilder = new AdvertiseSettings.Builder();
+
+		dataBuilder.setIncludeDeviceName(true);// must need true,otherwise can not be discovered when central scan
+		//dataBuilder.setIncludeTxPowerLevel(false); //necessity to fit in 31 byte advertisement
+		//dataBuilder.setServiceUuids(serviceUuids);
+		dataBuilder.addServiceUuid(new ParcelUuid(Constants.SERVICE_UUID));
+
+		settingsBuilder.setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED);
+		//settingsBuilder.setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH);
+		settingsBuilder.setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM);
+		//settingsBuilder.setType(AdvertiseSettings.ADVERTISE_TYPE_CONNECTABLE);
+		settingsBuilder.setConnectable(true);
+
+		mLeAdvertiser.startAdvertising(settingsBuilder.build(), dataBuilder.build(), mAdvertiseCallback);
+		advertising = true;
+	}
+
+	private void addServiceToGattServer() {
+		BluetoothGattService mGattService = new BluetoothGattService(Constants.SERVICE_UUID,
+				BluetoothGattService.SERVICE_TYPE_PRIMARY);
+		// alert level char.
+		int property = BluetoothGattCharacteristic.PROPERTY_NOTIFY//
+				| BluetoothGattCharacteristic.PROPERTY_INDICATE//
+				| BluetoothGattCharacteristic.PROPERTY_READ//
+				| BluetoothGattCharacteristic.PROPERTY_WRITE//
+				| BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE;
+
+		BluetoothGattCharacteristic mCharacter = new BluetoothGattCharacteristic(//
+				Constants.CHARACTERISTIC_UUID, //
+				property//
+				, BluetoothGattCharacteristic.PERMISSION_READ//
+						| BluetoothGattCharacteristic.PERMISSION_WRITE);
+
+		mGattService.addCharacteristic(mCharacter);
+		mGattServer.addService(mGattService);
 	}
 
 	private AdvertiseCallback mAdvertiseCallback = new AdvertiseCallback() {
@@ -197,7 +275,6 @@ public class PeripheraActivity extends Activity {
 		 */
 		public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
 			super.onConnectionStateChange(device, status, newState);
-			Log.i(TAG, "onConnectionStateChange");
 			mConnDeviceAddress = device.getAddress();
 
 			if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -233,7 +310,7 @@ public class PeripheraActivity extends Activity {
 				BluetoothGattCharacteristic characteristic, boolean preparedWrite, boolean responseNeeded, int offset,
 				byte[] value) {
 			super.onCharacteristicWriteRequest(device, requestId, characteristic, preparedWrite, responseNeeded, offset, value);
-			Log.i(TAG, "onCharacteristicWriteRequest");
+			Message.obtain(mHandler, WHAT_WRITE_REQUEST, new String(value)).sendToTarget();;
 		}
 
 		/**
@@ -242,6 +319,7 @@ public class PeripheraActivity extends Activity {
 		public void onDescriptorReadRequest(BluetoothDevice device, int requestId, int offset,
 				BluetoothGattDescriptor descriptor) {
 			super.onDescriptorReadRequest(device, requestId, offset, descriptor);
+			Log.i(TAG, "onDescriptorReadRequest");
 		}
 
 		/**
@@ -291,6 +369,17 @@ public class PeripheraActivity extends Activity {
 	protected void onPause() {
 		super.onPause();
 		stopAdvertising();
+		mHandler.removeCallbacksAndMessages(null);
+	}
+
+	/*
+	 * Terminate the advertiser
+	 */
+	private void stopAdvertising() {
+		if (mLeAdvertiser == null)
+			return;
+
+		mLeAdvertiser.stopAdvertising(mAdvertiseCallback);
 	}
 
 }
