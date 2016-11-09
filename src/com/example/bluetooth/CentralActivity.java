@@ -4,6 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -31,6 +35,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.os.ParcelUuid;
 import android.os.SystemClock;
@@ -41,9 +46,13 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.Button;
+import android.widget.CompoundButton;
+import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
+import android.widget.Switch;
 import android.widget.Toast;
 
 /**
@@ -81,8 +90,14 @@ public class CentralActivity extends Activity {
 	private Button mBtnSendData;
 	private ProgressDialog mProgressDialog;
 
+	private Switch mSwAutoConn;
+	boolean isAutoConn = true;
+	private ProgressBar mpBarConn;
+
+	/** 扫描超时时间 */
 	final int STOP_SCAN_TIME = 15 * 1000;
-	protected boolean bScanListener = true;
+	/** 连接等待时间 */
+	final int CONNECT_WAIT_TIME = 10 * 1000;
 
 	private Handler mHandler = new Handler() {
 		public void handleMessage(Message msg) {
@@ -97,19 +112,18 @@ public class CentralActivity extends Activity {
 					BluetoothDevice device = (BluetoothDevice) msg.obj;
 					mDevicesAdapter.removeAll();
 					mDevicesAdapter.add(device, true);
-					isConn = true;
-					//循环读取信号();
-					mRlSend.setVisibility(View.VISIBLE);
+					getDeviceLoopRssi();
 					break;
+
 				case WHAT_STATE_DISCONNECTED:
 					BluetoothDevice disDevice = (BluetoothDevice) msg.obj;
-					mDevicesAdapter.refreshConnState(disDevice, false);
+					mDevicesAdapter.refreshConnState(disDevice, getConnectState());
 					mDevicesAdapter.refreshRssi(disDevice.getAddress(), 0);
-					mBluetoothGatt.close();
-					isConn = false;
-					mRlSend.setVisibility(View.GONE);
-					mEtSendData.setEnabled(false);
-					mBtnSendData.setEnabled(false);
+					if (mBluetoothGatt != null)
+						mBluetoothGatt.close();
+
+					refreshSendDataView(false);
+					startAutoConnect();
 					break;
 
 				case WHAT_REFRESH_RSSI:
@@ -120,30 +134,79 @@ public class CentralActivity extends Activity {
 				case WHAT_CAN_SEND_DATA:
 					setCharacteristicNotification(Constants.SERVICE_UUID, Constants.CHARACTERISTIC_UUID, true);
 					String text = "{”low_temp”:”25”,”weather”:”多云””high_temp”:”31”,”city”:”深圳”,”curr_temp”:”28”,”pm2_5”:”60”,”quality”:”良”}";
-					//boolean result = writeCharacteristic(Constants.SERVICE_UUID, Constants.CHARACTERISTIC_UUID, text);
-					//Log.i(TAG, result + ",  已经发送数据:" + text + Thread.currentThread().getId());
-					mEtSendData.setEnabled(true);
-					mBtnSendData.setEnabled(true);
+					refreshSendDataView(true);
 					mEtSendData.setText(text);
+
+					// 循环发数据
+					new Thread(new Runnable() {
+						public void run() {
+							while (getConnectState()) {
+								SystemClock.sleep(1500);
+								boolean result = writeCharacteristic(Constants.SERVICE_UUID, Constants.CHARACTERISTIC_UUID, "{”low_temp”:”25");
+								//Log.i(TAG, "发送数据的返回值：" + result);
+							}
+						}
+					}).start();
 					break;
 				default:
 					break;
 			}
 		}
 
-		boolean isConn = false;
+		private void refreshSendDataView(boolean state) {
+			mRlSend.setVisibility(state ? View.VISIBLE : View.GONE);
+			mEtSendData.setEnabled(state);
+			mBtnSendData.setEnabled(state);
+		}
 
-		private void 循环读取信号() {
+		private void getDeviceLoopRssi() {
 			new Thread(new Runnable() {
 				public void run() {
-					while (isConn) {
+					while (getConnectState() && mBluetoothGatt != null) {
 						mBluetoothGatt.readRemoteRssi();
-						SystemClock.sleep(2000);
+						SystemClock.sleep(2 * 1000);
 					}
 				}
 			}).start();
 		};
 	};
+
+	class Token {
+	};
+
+	Token mToken = new Token();
+
+	private void startAutoConnect() {
+		new Thread(new Runnable() {
+			public void run() {
+				while (!getConnectState() && isAutoConn) {
+					Log.i(TAG, "自动连接线程启动..." + Thread.currentThread().getId());
+					EventBus.getDefault().post(new EventObj(EventObj.Toast, "自动连接线程启动..."));
+					connect(MAC_ADDRESS, false);
+					synchronized (mToken) {
+						try {
+							mToken.wait();
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+					}
+				}
+			}
+		}).start();
+	}
+
+	private boolean getConnectState() {
+		if (mBluetoothManager != null && mBluetoothGatt != null) {
+			final List<BluetoothDevice> connectedDevices = mBluetoothManager.getConnectedDevices(BluetoothProfile.GATT);
+			runOnUiThread(new Runnable() {
+				public void run() {
+					mSwAutoConn.setText("连接的设备：" + connectedDevices.size());
+				}
+			});
+			return (connectedDevices.size() > 0) ? true : false;
+		}
+		return false;
+	}
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -151,35 +214,65 @@ public class CentralActivity extends Activity {
 		setContentView(R.layout.activity_central);
 
 		mlvDevice = (ListView) findViewById(R.id.lv_devicelist);
-
 		mRlSend = (RelativeLayout) findViewById(R.id.rl_sendData);
 		mlvData = (ListView) findViewById(R.id.lv_datalist);
 		mEtSendData = (EditText) findViewById(R.id.et_text);
 		mBtnSendData = (Button) findViewById(R.id.btn_send);
+		mSwAutoConn = (Switch) findViewById(R.id.sw_auto_conn);
+		mpBarConn = (ProgressBar) findViewById(R.id.pb_connect);
+
+		EventBus.getDefault().register(this);
 
 		mDevicesAdapter = new DevicesAdapter(getApplicationContext());
 		mlvDevice.setAdapter(mDevicesAdapter);
 
-		// 蓝牙技术在Android 4.3+ 是通过BluetoothManager访问，而不是旧的静态 BluetoothAdapter.getInstance()
+		// 蓝牙技术在Android 4.3以上是通过BluetoothManager访问，而不是老的静态 BluetoothAdapter.getInstance()
 		mBluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
 		mBluetoothAdapter = mBluetoothManager.getAdapter();
+		mBluetoothAdapter.setName("中央");
 
+		// 注册经典蓝牙扫描的广播
 		IntentFilter intentFilter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
 		intentFilter.addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
 		intentFilter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
 		registerReceiver(mReceiver, intentFilter);
 
+		// 设置标题
+		getActionBar().setTitle("Central：" + mBluetoothAdapter.getAddress());
+		getActionBar().setDisplayHomeAsUpEnabled(true);
+
+		// 搜索后显示的设备点击事件
 		mlvDevice.setOnItemClickListener(new OnItemClickListener() {
 			public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-				stopScan();
 				BDevice item = mDevicesAdapter.getItem(position);
-				connect(item.mDevice.getAddress(), item.connState);
+				connect(item.mDevice.getAddress(), getConnectState());
+				// 更新界面
+				mDevicesAdapter.refreshConnState(item.mDevice, getConnectState());
 			}
 		});
 
-		mBluetoothAdapter.setName("中央");
-		getActionBar().setTitle("Central：" + mBluetoothAdapter.getAddress());
-		getActionBar().setDisplayHomeAsUpEnabled(true);
+		mSwAutoConn.setOnCheckedChangeListener(new OnCheckedChangeListener() {
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+				isAutoConn = isChecked;
+				ToastUtils.showToast(CentralActivity.this, "isChecked = " + isChecked);
+			}
+		});
+	}
+
+	@Subscribe(threadMode = ThreadMode.MAIN)
+	public void showUIMain(EventObj event) {
+		switch (event.eventType) {
+			case EventObj.Toast:
+				ToastUtils.showToast(CentralActivity.this, event.msg);
+				break;
+			case EventObj.Dialog:
+				if (event.msg.isEmpty())
+					refreshProgressDialog(event.isShow);
+				else
+					refreshProgressDialog(event.isShow, event.msg);
+				break;
+		}
 	}
 
 	@Override
@@ -197,15 +290,15 @@ public class CentralActivity extends Activity {
 
 		// 检查蓝牙BLE。在产品中，我们的清单条目将保持这个从安装在这些设备上， 但这将允许测试设备或其他侧向载荷，报告是否存在的特征。
 		if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
-			Toast.makeText(this, "不支持BLE.", Toast.LENGTH_SHORT).show();
+			ToastUtils.showToast(CentralActivity.this, "不支持BLE.");
 			finish();
 			return;
 		}
 	}
 
 	@Override
-	protected void onStop() {
-		super.onStop();
+	protected void onDestroy() {
+		super.onDestroy();
 		//停止任何活动扫描
 		stopScan();
 		//断开任何活动连接
@@ -214,10 +307,11 @@ public class CentralActivity extends Activity {
 			mBluetoothGatt = null;
 		}
 
+		mHandler.removeCallbacksAndMessages(null);
 		if (mReceiver != null)
 			unregisterReceiver(mReceiver);
 
-		mHandler.removeCallbacksAndMessages(null);
+		EventBus.getDefault().unregister(this);
 	}
 
 	public void scanClick(View v) {
@@ -240,40 +334,59 @@ public class CentralActivity extends Activity {
 		}
 	}
 
-	private void connect(final String address, final boolean isDisconnect) {
-		refreshProgressDialog(true, "连接中......");
-		// 连接方法和断开方法要放在线程里面来执行，要不然很容易连不上，尤其是三星手机，note3和s5都已测过，
-		// 连上率30%左右，放在线程上执行有90%多
-		new Thread(new Runnable() {
-			public void run() {
+	private synchronized void connect(final String address, final boolean isDisconnect) {
+		//stopScan();
+		//EventBus.getDefault().post(new EventObj(EventObj.Dialog, "连接中......", true));
+		refreshConnecting(true);
+
+		new Thread(new Runnable() { // 连接方法和断开方法要放在线程里面来执行，要不然很容易连不上，尤其是三星手机，note3和s5都已测过，
+			public void run() { // 连上率30%左右，放在线程上执行有90%多
 				BluetoothDevice bDevice = mBluetoothAdapter.getRemoteDevice(address);
 				if (bDevice == null) {
-					Log.i(TAG, "BluetoothDevice == null");
+					Log.i(TAG, "BluetoothDevice is null");
 					return;
 				}
 
-				/*if(mBluetoothManager != null && mBluetoothGatt != null){
-					List<BluetoothDevice> connectedDevices = mBluetoothManager.getConnectedDevices(BluetoothProfile.GATT);
-					for (BluetoothDevice bd : connectedDevices)
-						if (bd != null)
-							mBluetoothGatt.disconnect();
-				}*/
-
-				if (isDisconnect)
+				// 为了能进行下次的稳定连接必须的
+				if (mBluetoothGatt != null) {
 					mBluetoothGatt.disconnect();
-				else {
-					Log.i(TAG, "开始连接...    address:" + bDevice.toString());
-					mBluetoothGatt = bDevice.connectGatt(getApplicationContext(), false, mGattCallback);
-					mBluetoothGatt.connect();
+					SystemClock.sleep(1000);
+					if (mBluetoothGatt != null)
+						mBluetoothGatt.close();
+					mBluetoothGatt = null;
+					if (isDisconnect)
+						refreshConnecting(false);
 				}
+				if (!isDisconnect) {
+					mBluetoothGatt = bDevice.connectGatt(getApplicationContext(), false, mGattCallback);
+					boolean connect = mBluetoothGatt.connect();
+					Log.i(TAG, "开始连接...    address:" + bDevice.toString() + ",connect：" + connect);
 
-				/*mHandler.postDelayed(new Runnable() {
-					public void run() {
-						refreshProgressDialog(false);
-					}
-				}, 10 * 1000);*/
+					mHandler.postDelayed(new Runnable() {
+						public void run() {
+							if (!getConnectState()) {
+								refreshConnecting(false);
+								//EventBus.getDefault().post(new EventObj(EventObj.Dialog, false));
+								EventBus.getDefault().post(new EventObj(EventObj.Toast, "连接超时！"));
+								synchronized (mToken) {
+									mToken.notifyAll();
+								}
+							}
+						}
+					}, CONNECT_WAIT_TIME);
+				}
 			}
 		}).start();
+	}
+
+	private void refreshConnecting(final boolean isVisible) {
+		runOnUiThread(new Runnable() {
+			public void run() {
+				mpBarConn.setVisibility(isVisible ? View.VISIBLE : View.GONE);
+				mlvDevice.setEnabled(!isVisible);
+				mlvDevice.setClickable(!isVisible);
+			}
+		});
 	}
 
 	private void startScanBT() {
@@ -292,10 +405,12 @@ public class CentralActivity extends Activity {
 			String action = intent.getAction();
 			if (BluetoothAdapter.ACTION_DISCOVERY_STARTED.equals(action)) {
 				Log.i(TAG, "开始搜索");
-				refreshProgressDialog(true);
+				EventBus.getDefault().post(new EventObj(EventObj.Dialog, true));
+
 			} else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
 				Log.i(TAG, "搜索结束");
-				refreshProgressDialog(false);
+				EventBus.getDefault().post(new EventObj(EventObj.Dialog, false));
+
 			} else if (BluetoothDevice.ACTION_FOUND.equals(action)) {
 				BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
 				short rssi = intent.getExtras().getShort(BluetoothDevice.EXTRA_RSSI);// 信号强度
@@ -312,7 +427,7 @@ public class CentralActivity extends Activity {
 
 	private void startScanBLE() {
 		Log.d(TAG, "开始扫描Ble...");
-		refreshProgressDialog(true);
+		EventBus.getDefault().post(new EventObj(EventObj.Dialog, true));
 		mDevicesAdapter.removeAll();
 		mHandler.sendEmptyMessageDelayed(WHAT_STOP_SCAN, STOP_SCAN_TIME);// 20秒后停止扫描
 
@@ -326,41 +441,64 @@ public class CentralActivity extends Activity {
 	}
 
 	protected void stopScan() {
-		refreshProgressDialog(false);
+		EventBus.getDefault().post(new EventObj(EventObj.Dialog, false));
 		mHandler.removeCallbacksAndMessages(null);
-		if (mScanCallback != null && mBluetoothAdapter.getBluetoothLeScanner() != null)
+		if (mScanCallback != null && mBluetoothAdapter.getBluetoothLeScanner() != null) {
+			Log.i(TAG, "停止扫描BLE");
 			mBluetoothAdapter.getBluetoothLeScanner().stopScan(mScanCallback);
+		}
 
-		if (mBluetoothAdapter.isDiscovering())
+		if (mBluetoothAdapter.isDiscovering()) {
+			Log.i(TAG, "停止扫描经典蓝牙");
 			mBluetoothAdapter.cancelDiscovery();
-
-		Log.i(TAG, "停止扫描");
+		}
 	}
 
 	//***************************************************** Dialog ******************************************************
 
-	private void refreshProgressDialog(boolean isShow) {
+	private synchronized void refreshProgressDialog(boolean isShow) {
 		refreshProgressDialog(isShow, "扫描中......");
 	}
 
-	private void refreshProgressDialog(boolean isShow, String msg) {
+	private synchronized void refreshProgressDialog(final boolean isShow, final String msg) {
 		if (mProgressDialog == null) {
 			mProgressDialog = new ProgressDialog(CentralActivity.this);
 			mProgressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
 			mProgressDialog.setCanceledOnTouchOutside(false);
+			mProgressDialog.setOnDismissListener(new OnDismissListener() {
+				public void onDismiss(DialogInterface dialog) {
+					stopScan();
+				}
+			});
 		}
-		mProgressDialog.setMessage(msg);
 
+		mProgressDialog.setMessage(msg);
 		if (isShow && !mProgressDialog.isShowing())
 			mProgressDialog.show();
 		else if (mProgressDialog.isShowing())
 			mProgressDialog.cancel();
+	}
 
-		mProgressDialog.setOnDismissListener(new OnDismissListener() {
-			public void onDismiss(DialogInterface dialog) {
-				stopScan();
-			}
-		});
+	class EventObj {
+		static final int Toast = 1;
+		static final int Dialog = 2;
+		int eventType = 0;
+		boolean isShow = false;
+		String msg = "";
+
+		public EventObj(int eventType, String msg) {
+			this(eventType, msg, false);
+		}
+
+		public EventObj(int eventType, boolean isShow) {
+			this(eventType, "", isShow);
+		}
+
+		public EventObj(int eventType, String msg, boolean isShow) {
+			this.eventType = eventType;
+			this.msg = msg;
+			this.isShow = isShow;
+		}
 	}
 
 	//***************************************************** 回调 ******************************************************
@@ -385,8 +523,9 @@ public class CentralActivity extends Activity {
 
 		private void processResult(ScanResult result) {
 			Log.i(TAG, "New LE Device: " + result.toString());
+
 			BluetoothDevice remoteDevice = mBluetoothAdapter.getRemoteDevice(result.getDevice().getAddress());
-			Log.i(TAG, "remoteDevice：" + remoteDevice);
+			Log.i(TAG, "remoteDevice：" + result.getClass().getCanonicalName());
 
 			//result.getScanRecord().
 			Log.i(TAG, "***********************************************");
@@ -400,6 +539,13 @@ public class CentralActivity extends Activity {
 		public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
 			super.onConnectionStateChange(gatt, status, newState);
 			mBluetoothGatt = gatt;
+			//refreshProgressDialog(false);
+			EventBus.getDefault().post(new EventObj(EventObj.Dialog, false));
+			refreshConnecting(false);
+			// 唤醒重连线程
+			synchronized (mToken) {
+				mToken.notifyAll();
+			}
 
 			BluetoothDevice device = gatt.getDevice();
 			if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -410,11 +556,6 @@ public class CentralActivity extends Activity {
 				Log.i(TAG, "已断开!!!");
 				Message.obtain(mHandler, WHAT_STATE_DISCONNECTED, device).sendToTarget();
 			}
-			runOnUiThread(new Runnable() {
-				public void run() {
-					refreshProgressDialog(false);
-				}
-			});
 		}
 
 		//服务发现之后的回调 
@@ -441,7 +582,7 @@ public class CentralActivity extends Activity {
 		//请求characteristic写之后的回调 
 		public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
 			super.onCharacteristicWrite(gatt, characteristic, status);
-			Log.i(TAG, "status:" + status + ", onCharacteristicWrite:" + new String(characteristic.getValue()));
+			//Log.i(TAG, "status:" + status + ", onCharacteristicWrite:" + new String(characteristic.getValue()));
 		}
 
 		//characteristic属性改变之后的回调 
@@ -487,21 +628,20 @@ public class CentralActivity extends Activity {
 			Log.i(TAG, "BluetoothAdapter not initialized");
 			return;
 		}
-		BluetoothGattService service = mBluetoothGatt.getService(serviceUUID);
-		BluetoothGattCharacteristic characteristic = service.getCharacteristic(characteristicUUID);
-
-		mBluetoothGatt.setCharacteristicNotification(characteristic, enabled);
-
 		try {
+			BluetoothGattService service = mBluetoothGatt.getService(serviceUUID);
+			BluetoothGattCharacteristic characteristic = service.getCharacteristic(characteristicUUID);
+
+			mBluetoothGatt.setCharacteristicNotification(characteristic, enabled);
+
 			BluetoothGattDescriptor descriptor = characteristic
 					.getDescriptor(Constants.DESCRIPTOR_CLIENT_CHARACTERISTIC_CONFIGURATION);
-			if(descriptor == null){
-				Log.i(TAG, "descriptor == null");
+			if (descriptor == null) {
+				Log.i(TAG, "descriptor is null");
 				return;
 			}
-			/*descriptor.setValue(enabled ? BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-					: BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE);*/
-			descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+			descriptor.setValue(enabled ? BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+					: BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE);
 			mBluetoothGatt.writeDescriptor(descriptor);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -515,9 +655,13 @@ public class CentralActivity extends Activity {
 	 * @param characteristicUUID
 	 * @param value 待写入的值
 	 */
-	public boolean writeCharacteristic(UUID serviceUUID, UUID characteristicUUID, String value) {
+	public synchronized boolean writeCharacteristic(UUID serviceUUID, UUID characteristicUUID, String value) {
 		if (mBluetoothGatt != null) {
 			BluetoothGattService service = mBluetoothGatt.getService(serviceUUID);
+			if (service == null) {
+				Log.i(TAG, "service is null");
+				return false;
+			}
 			BluetoothGattCharacteristic characteristic = service.getCharacteristic(characteristicUUID);
 			characteristic.setValue(value.getBytes());
 			return mBluetoothGatt.writeCharacteristic(characteristic);
@@ -528,7 +672,8 @@ public class CentralActivity extends Activity {
 	private void verifyIfRequestPermission() {
 		if (Build.VERSION.SDK_INT >= 23) {
 			Log.i(TAG, "onCreate: checkSelfPermission");
-			if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+			if (ContextCompat.checkSelfPermission(this, //
+					Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
 				Log.i(TAG, "onCreate: Android 6.0 动态申请权限");
 
 				if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.READ_CONTACTS)) {
