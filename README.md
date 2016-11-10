@@ -1,15 +1,14 @@
 # BluetoothBleCentralOrPeriphera
-运行效果图
- ![image](https://github.com/kairui467/BluetoothCentralOrPeriphera/raw/master/screen/screen2.jpg) ![image](https://github.com/kairui467/BluetoothCentralOrPeriphera/raw/master/screen/screen3.jpg)
- > Central and Periphera
+运行效果图：
 
- ![image](https://github.com/kairui467/BluetoothCentralOrPeriphera/raw/master/screen/screen1.jpg)
- > 主页面
+ ![image](https://github.com/kairui467/BluetoothCentralOrPeriphera/raw/master/screen/screen2.jpg) ![image](https://github.com/kairui467/BluetoothCentralOrPeriphera/raw/master/screen/screen3.jpg)![image](https://github.com/kairui467/BluetoothCentralOrPeriphera/raw/master/screen/screen1.jpg)
+ > Central and Periphera and MainActivity
 
- ## 此Demo目的
- 测试使用蓝牙的物理地址去连接BLE设备的可行性（并非BLE地址）
+## 此Demo目的：
 
- ### 中央
+测试使用蓝牙的物理地址去连接BLE设备的可行性（并非BLE地址）
+
+### 中央
  - 支持经典蓝牙和BLE的扫描
  - 使用物理地址连接BLE，因为BLE的地址是随蓝牙开关而随机生成的；
  **连接代码**
